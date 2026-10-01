@@ -85,6 +85,65 @@ app.get('/api/base44/health', async (_req, res) => {
   }
 });
 
+
+app.post('/api/whatsapp/test', async (_req, res) => {
+  const accessToken = process.env.META_ACCESS_TOKEN;
+  const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+  const recipient = process.env.META_TEST_TO;
+
+  if (!accessToken || !phoneNumberId || !recipient) {
+    return res.status(503).json({
+      status: 'error',
+      whatsapp: 'not_configured',
+    });
+  }
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v26.0/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: recipient,
+          type: 'template',
+          template: {
+            name: 'hello_world',
+            language: {
+              code: 'en_US',
+            },
+          },
+        }),
+      },
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        status: 'error',
+        whatsapp: 'send_failed',
+        error: data?.error?.message ?? 'Meta API returned an error.',
+      });
+    }
+
+    return res.status(200).json({
+      status: 'ok',
+      whatsapp: 'message_sent',
+      message_id: data?.messages?.[0]?.id ?? null,
+    });
+  } catch (_error) {
+    return res.status(502).json({
+      status: 'error',
+      whatsapp: 'request_failed',
+    });
+  }
+});
+
 if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
   app.listen(port, () => {
     console.log(`Lex Flow API running on port ${port}`);
