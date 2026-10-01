@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Server, Activity, CheckCircle2, RefreshCw, Terminal, ArrowUpRight, ShieldCheck, Cpu } from 'lucide-react';
 
-const API_BASE_URL = 'https://lex-flow-350mbelif-fabios-projects-96a80c64.vercel.app';
+const API_BASE_URL = 'https://lex-flow-steel.vercel.app';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'endpoints' | 'logs'>('dashboard');
