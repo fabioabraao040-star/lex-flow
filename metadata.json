@@ -1,6 +1,6 @@
 {
-  "name": "Lex Flow API",
-  "description": "Backend inicial do Lex Flow usando Node.js, TypeScript e API REST.",
+  "name": "Lex Flow Dashboard & API",
+  "description": "Lex Flow SaaS Dashboard connected to Vercel Backend API.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
