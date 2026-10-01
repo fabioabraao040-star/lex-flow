@@ -1,0 +1,6 @@
+{
+  "name": "Lex Flow API",
+  "description": "Backend inicial do Lex Flow usando Node.js, TypeScript e API REST.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
