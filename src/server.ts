@@ -23,6 +23,7 @@ app.use(
     origin: [
       'https://lex-flow-dashboard.vercel.app',
   'https://lex-flow-elite.base44.app',
+      'https://preview--lex-flow-elite.base44.app',
       'http://localhost:3000',
       'http://localhost:5173',
     ],
