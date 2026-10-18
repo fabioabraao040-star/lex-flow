@@ -21,8 +21,8 @@
     "strict": true,
     "esModuleInterop": true,
     "types": [
-      "vite/client",
-      "node"
+      "node",
+      "vite/client"
     ]
   },
   "include": [
