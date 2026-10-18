@@ -6,7 +6,7 @@
   "scripts": {
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.server.json",
+    "build": "vite build && tsc -p tsconfig.server.json",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
