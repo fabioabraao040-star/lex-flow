@@ -19,7 +19,11 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "types": [
+      "@types/node",
+      "vite/client"
+    ]
   },
   "include": [
     "src/**/*"
