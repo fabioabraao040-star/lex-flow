@@ -238,11 +238,15 @@ app.get('/api/base44/health', requireAdminAuth, async (_req, res) => {
   }
 });
 
+let latestMonitoringReport: any = null;
+let lastMonitoringCheckTime = 0;
+
 // ==========================================
 // 8. PRO MONITOR REAL DIAGNOSTIC ENDPOINT
 // ==========================================
 app.get('/api/monitoring/status', requireAdminAuth, async (req, res) => {
   const isTestExecution = req.query.test === 'true';
+  const isAutoRefresh = req.query.auto === 'true';
   const startTime = Date.now();
   const serviceList = [
     { id: 'vercel-backend', name: 'API / Backend na Vercel', category: 'Vercel / Produção' },
@@ -251,23 +255,20 @@ app.get('/api/monitoring/status', requireAdminAuth, async (req, res) => {
     { id: 'ai-provider', name: 'Provedor de IA (LLM)', category: 'Inteligência Artificial' },
   ];
 
-  const services: any[] = [];
-
-  if (!isTestExecution) {
-    for (const s of serviceList) {
-      services.push({
-        id: s.id,
-        name: s.name,
-        category: s.category,
-        status: 'gray',
-        httpCode: 0,
-        responseTime: 0,
-        lastChecked: null,
-        description: 'Serviço não testado — clique em "Testar Todas as Conexões" para iniciar a auditoria.',
-        guidance: 'Aguardando execução do teste real.',
-        history: [],
-      });
-    }
+  // If not an explicit test, auto-refresh, and no test was performed yet, return initial clean state
+  if (!isTestExecution && !isAutoRefresh && !latestMonitoringReport) {
+    const services = serviceList.map(s => ({
+      id: s.id,
+      name: s.name,
+      category: s.category,
+      status: 'gray',
+      httpCode: 0,
+      responseTime: 0,
+      lastChecked: null,
+      description: 'Serviço não testado — clique em "Testar Todas as Conexões" para iniciar a auditoria.',
+      guidance: 'Aguardando execução do teste real.',
+      history: [],
+    }));
 
     return res.status(200).json({
       status: 'ok',
@@ -283,7 +284,13 @@ app.get('/api/monitoring/status', requireAdminAuth, async (req, res) => {
     });
   }
 
+  // If called without ?test=true and we tested within the last 15 seconds, return cached report
+  if (!isTestExecution && latestMonitoringReport && (Date.now() - lastMonitoringCheckTime < 15000)) {
+    return res.status(200).json(latestMonitoringReport);
+  }
+
   // Live Test Execution
+  const services: any[] = [];
   // 1. API / Backend na Vercel
   const vercelTargetUrl = process.env.VERCEL_API_URL || 'https://lex-flow-steel.vercel.app';
   let vercelStatus = 'gray';
@@ -475,7 +482,7 @@ app.get('/api/monitoring/status', requireAdminAuth, async (req, res) => {
   const errorCount = services.filter(s => s.status === 'red' || s.status === 'timeout').length;
   const pendingCount = services.filter(s => s.status === 'yellow' || s.status === 'gray').length;
 
-  return res.status(200).json({
+  const responseData = {
     status: 'ok',
     summary: {
       total: services.length,
@@ -486,7 +493,12 @@ app.get('/api/monitoring/status', requireAdminAuth, async (req, res) => {
       durationMs: totalDuration,
     },
     services,
-  });
+  };
+
+  latestMonitoringReport = responseData;
+  lastMonitoringCheckTime = Date.now();
+
+  return res.status(200).json(responseData);
 });
 
 // ==========================================

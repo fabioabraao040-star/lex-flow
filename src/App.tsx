@@ -101,7 +101,10 @@ export default function App() {
   const [monitoringData, setMonitoringData] = useState<any>(null);
   const [loadingMonitoring, setLoadingMonitoring] = useState<boolean>(false);
   const [selectedService, setSelectedService] = useState<any>(null);
-  const [autoRefresh, setAutoRefresh] = useState<boolean>(false);
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(() => {
+    return localStorage.getItem('lexflow_auto_refresh') === 'true';
+  });
+  const [countdown, setCountdown] = useState<number>(30);
 
   // Audio Alert State
   const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
@@ -177,6 +180,17 @@ export default function App() {
     setIsAuthenticated(false);
   };
 
+  // Toggle Global Auto-Refresh
+  const toggleAutoRefresh = () => {
+    const nextState = !autoRefresh;
+    setAutoRefresh(nextState);
+    localStorage.setItem('lexflow_auto_refresh', String(nextState));
+    if (nextState) {
+      setCountdown(30);
+      fetchMonitoring(false);
+    }
+  };
+
   // Fetch monitoring status (isManual = true triggers live testing via ?test=true)
   const fetchMonitoring = async (isManual = false) => {
     if (!isAuthenticated || !authToken) return;
@@ -211,17 +225,28 @@ export default function App() {
 
   useEffect(() => {
     if (isAuthenticated && authToken) {
-      fetchMonitoring(false); // loads clean untested state on initial load
+      fetchMonitoring(false); // loads clean untested state or cached on initial load
     }
   }, [isAuthenticated, authToken]);
 
-  // Auto-refresh interval (every 30 seconds if enabled)
+  // Global Auto-refresh countdown & polling (polls /api/monitoring/status every 30 seconds)
   useEffect(() => {
-    if (!isAuthenticated || !autoRefresh) return;
-    const interval = setInterval(() => {
-      fetchMonitoring(false);
-    }, 30000);
-    return () => clearInterval(interval);
+    if (!isAuthenticated || !autoRefresh) {
+      setCountdown(30);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          fetchMonitoring(false);
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, [isAuthenticated, autoRefresh, lastErrorCount, soundEnabled, authToken]);
 
   // Web Audio API Alert Sound
@@ -375,6 +400,29 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Auto-Refresh Toggle in Header */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoRefresh}
+            onClick={toggleAutoRefresh}
+            className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+              autoRefresh 
+                ? 'bg-[#C8A96B]/20 text-[#C8A96B] border border-[#C8A96B]/50' 
+                : 'bg-[#101C2C] text-slate-400 border border-slate-700 hover:text-white'
+            }`}
+            title={autoRefresh ? `Auto-refresh ativo (próxima busca em ${countdown}s)` : 'Ativar auto-refresh a cada 30 segundos'}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${autoRefresh ? 'animate-spin text-[#C8A96B]' : 'text-slate-400'}`} style={autoRefresh ? { animationDuration: '4s' } : undefined} />
+            <span className="hidden md:inline">Auto-refresh</span>
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${autoRefresh ? 'bg-[#C8A96B]/30 text-[#C8A96B]' : 'bg-slate-800 text-slate-400'}`}>
+              {autoRefresh ? `${countdown}s` : '30s'}
+            </span>
+            <span className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${autoRefresh ? 'bg-[#C8A96B]' : 'bg-slate-600'}`}>
+              <span className={`inline-block h-3 w-3 m-0.5 transform rounded-full transition-transform ${autoRefresh ? 'translate-x-3 bg-white' : 'translate-x-0 bg-slate-300'}`} />
+            </span>
+          </button>
+
           {/* Sound Alert Toggle */}
           <button
             onClick={toggleSound}
@@ -451,6 +499,45 @@ export default function App() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+            {/* Auto-Refresh Toggle Control Card with Switch */}
+            <div className="flex items-center justify-between gap-3 bg-[#101C2C]/90 px-4 py-2.5 rounded-xl border border-slate-700/80 shadow-inner">
+              <div className="flex items-center gap-2.5">
+                <span className="relative flex h-2.5 w-2.5">
+                  {autoRefresh && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#C8A96B] opacity-75"></span>
+                  )}
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${autoRefresh ? 'bg-[#C8A96B]' : 'bg-slate-500'}`}></span>
+                </span>
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                    <span>Auto-refresh</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-[#C8A96B] border border-[#C8A96B]/30">30s</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    {autoRefresh ? `Próxima busca em ${countdown}s` : 'Desativado'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Toggle Switch */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoRefresh}
+                onClick={toggleAutoRefresh}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#C8A96B]/40 ${
+                  autoRefresh ? 'bg-[#C8A96B]' : 'bg-slate-700'
+                }`}
+                title={autoRefresh ? 'Desativar auto-refresh' : 'Ativar auto-refresh a cada 30 segundos'}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full shadow-md transition duration-200 ease-in-out ${
+                    autoRefresh ? 'translate-x-5 bg-white' : 'translate-x-0 bg-slate-400'
+                  }`}
+                />
+              </button>
+            </div>
+
             <button
               onClick={() => fetchMonitoring(true)}
               disabled={loadingMonitoring}
