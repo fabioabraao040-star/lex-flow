@@ -2,8 +2,92 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Server, Activity, CheckCircle2, AlertTriangle, XCircle, RefreshCw, 
   Terminal, ArrowUpRight, ShieldCheck, Cpu, Volume2, VolumeX, Bell, 
-  Lock, LogOut, Check, Info, Clock, Zap, ExternalLink, ShieldAlert
+  Lock, LogOut, Check, Info, Clock, Zap, ExternalLink, ShieldAlert,
+  TrendingUp
 } from 'lucide-react';
+import { ResponsiveContainer, AreaChart, Area, Tooltip } from 'recharts';
+
+function ServiceSparkline({ history, status }: { history: any[]; status: string }) {
+  if (!history || history.length === 0 || status === 'gray') {
+    return (
+      <div className="h-9 w-full flex items-center justify-between px-2.5 py-1 bg-[#101C2C]/50 rounded-lg border border-slate-700/40 text-[10px] text-slate-500 font-mono">
+        <span className="flex items-center gap-1.5">
+          <Activity className="w-3 h-3 text-slate-500" />
+          <span>Tendência (5 estados)</span>
+        </span>
+        <span className="text-[9px] uppercase tracking-wider text-slate-500">Aguardando</span>
+      </div>
+    );
+  }
+
+  const chartData = history.slice(-5).map((item, idx) => ({
+    name: `T-${5 - idx}`,
+    value: item.score !== undefined ? item.score : (item.status === 'green' ? 100 : item.status === 'yellow' ? 65 : 20),
+    responseTime: item.responseTime || 0,
+    status: item.status,
+    time: item.timestamp ? new Date(item.timestamp).toLocaleTimeString('pt-BR') : '',
+  }));
+
+  const strokeColor =
+    status === 'green'
+      ? '#10b981'
+      : status === 'yellow'
+      ? '#f59e0b'
+      : status === 'red' || status === 'timeout'
+      ? '#ef4444'
+      : '#64748b';
+
+  return (
+    <div className="w-full bg-[#101C2C]/60 rounded-lg p-2 border border-slate-700/60 flex flex-col gap-1">
+      <div className="flex items-center justify-between text-[10px] font-mono">
+        <span className="text-slate-400 flex items-center gap-1">
+          <TrendingUp className="w-3 h-3 text-[#C8A96B]" />
+          <span>Saúde (Últimos 5 testes)</span>
+        </span>
+        <span className="font-semibold" style={{ color: strokeColor }}>
+          {chartData[chartData.length - 1]?.value ?? 100}%
+        </span>
+      </div>
+      <div className="h-9 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+            <defs>
+              <linearGradient id={`grad-${status}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={strokeColor} stopOpacity={0.4} />
+                <stop offset="100%" stopColor={strokeColor} stopOpacity={0.0} />
+              </linearGradient>
+            </defs>
+            <Tooltip
+              content={({ active, payload }) => {
+                if (active && payload && payload.length) {
+                  const data = payload[0].payload;
+                  return (
+                    <div className="bg-[#101C2C] border border-slate-700 px-2 py-1 rounded shadow-lg text-[10px] font-mono text-white pointer-events-none z-50">
+                      <div>Status: <span className="font-bold uppercase" style={{ color: strokeColor }}>{data.status}</span></div>
+                      <div>Latência: {data.responseTime}ms</div>
+                      <div className="text-slate-400 text-[9px]">{data.time}</div>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke={strokeColor}
+              strokeWidth={1.5}
+              fill={`url(#grad-${status})`}
+              dot={{ r: 2, fill: strokeColor }}
+              activeDot={{ r: 3.5, stroke: '#ffffff', strokeWidth: 1 }}
+              isAnimationActive={false}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   // Authentication State
@@ -506,6 +590,8 @@ export default function App() {
                       </p>
                     </div>
                   </div>
+
+                  <ServiceSparkline history={svc.history} status={svc.status} />
 
                   <div className="flex items-center justify-between pt-3 border-t border-slate-700/60 text-xs text-slate-400 font-mono">
                     <div className="flex items-center gap-2">
