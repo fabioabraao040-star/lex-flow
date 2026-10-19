@@ -24,8 +24,8 @@ const isProduction = process.env.NODE_ENV === 'production' || Boolean(process.en
 const adminConfigured = ADMIN_PASSWORD && ADMIN_PASSWORD.length >= 8 && ADMIN_SECRET && ADMIN_SECRET.length >= 16;
 const canUseAdmin = !isProduction || adminConfigured;
 
-const resolvedPassword = canUseAdmin ? (ADMIN_PASSWORD || 'lexflow2026') : undefined;
-const resolvedSecret = canUseAdmin ? (ADMIN_SECRET || 'lexflow_secure_server_secret_2026') : undefined;
+const resolvedPassword = canUseAdmin ? (ADMIN_PASSWORD || (!isProduction ? 'lexflow2026' : undefined)) : undefined;
+const resolvedSecret = canUseAdmin ? (ADMIN_SECRET || (!isProduction ? 'lexflow_secure_server_secret_2026' : undefined)) : undefined;
 
 
 const BASE44_APP_ID = process.env.BASE44_APP_ID || '6abd7343909c5bbba892bcc2';
