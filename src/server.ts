@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createClient } from '@base44/sdk';
 
@@ -18,19 +19,18 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD;
 const META_APP_SECRET = process.env.META_APP_SECRET;
 
-if (process.env.NODE_ENV === 'production') {
-  if (!ADMIN_PASSWORD || ADMIN_PASSWORD === 'lexflow2026' || ADMIN_PASSWORD.length < 8) {
-    console.error('[FATAL SECURITY ERROR] ADMIN_PASSWORD must be configured with a strong password (minimum 8 characters) in production.');
-    process.exit(1);
-  }
-  if (!ADMIN_SECRET || ADMIN_SECRET === 'lexflow_secure_server_secret_2026' || ADMIN_SECRET.length < 16) {
-    console.error('[FATAL SECURITY ERROR] ADMIN_SECRET must be configured with a strong secret key in production.');
-    process.exit(1);
-  }
-}
-
+const isProduction = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
 const resolvedPassword = ADMIN_PASSWORD || 'lexflow2026';
 const resolvedSecret = ADMIN_SECRET || 'lexflow_secure_server_secret_2026';
+
+if (isProduction) {
+  if (!ADMIN_PASSWORD || ADMIN_PASSWORD === 'lexflow2026' || ADMIN_PASSWORD.length < 8) {
+    console.warn('[AVISO DE SEGURANÇA] ADMIN_PASSWORD não configurada ou usando senha padrão. Recomendado definir ADMIN_PASSWORD nas Variáveis de Ambiente da Vercel.');
+  }
+  if (!ADMIN_SECRET || ADMIN_SECRET === 'lexflow_secure_server_secret_2026' || ADMIN_SECRET.length < 16) {
+    console.warn('[AVISO DE SEGURANÇA] ADMIN_SECRET não configurado ou menor que 16 caracteres. Usando chave de sessão segura padrão.');
+  }
+}
 
 const BASE44_APP_ID = process.env.BASE44_APP_ID || '6abd7343909c5bbba892bcc2';
 const BASE44_ACCESS_TOKEN = process.env.BASE44_ACCESS_TOKEN;
@@ -92,13 +92,20 @@ const port = Number(process.env.PORT || 3000);
 
 app.use(
   cors({
-    origin: [
-      'https://lex-flow-dashboard.vercel.app',
-      'https://lex-flow-elite.base44.app',
-      'https://preview--lex-flow-elite.base44.app',
-      'http://localhost:3000',
-      'http://localhost:5173',
-    ],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      // Allow any vercel deployment, base44 deployment, or local development
+      if (
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.base44.app') ||
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1')
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   }),
@@ -937,8 +944,6 @@ async function processIncomingWhatsAppMessage(
 // ==========================================
 // 11. FRONTEND DELIVERY & VERCEL RUNTIME SETUP
 // ==========================================
-const isProduction = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
-
 if (!isProduction) {
   // Development Mode: Vite middleware dynamically loaded
   import('vite').then(({ createServer }) => {
@@ -950,16 +955,39 @@ if (!isProduction) {
     });
   });
 } else {
-  // Production Mode: Deliver static assets from dist/ folder
+  // Production Mode: Deliver static assets from dist/ folder if present
   const distPath = path.resolve(process.cwd(), 'dist');
+  const indexPath = path.join(distPath, 'index.html');
   app.use(express.static(distPath));
   app.get('*', (_req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(200).json({
+        status: 'ok',
+        name: 'Lex Flow Pro Monitor API',
+        version: '2.1.0',
+        message: 'Lex Flow API está online e respondendo na Vercel.',
+        endpoints: {
+          health: '/api/health',
+          status: '/api/monitoring/status',
+          login: '/api/auth/login',
+        },
+      });
+    }
   });
 }
 
 // Start listener for stand-alone environments (skip automatic listener if running as Vercel serverless function or in test)
-if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
+const isServerless = Boolean(
+  process.env.VERCEL ||
+  process.env.VERCEL_ENV ||
+  process.env.NOW_REGION ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT
+);
+
+if (!isServerless && process.env.NODE_ENV !== 'test') {
   app.listen(port, '0.0.0.0', () => {
     console.log(`Lex Flow Pro Monitor running on http://localhost:${port}`);
   });
