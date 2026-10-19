@@ -20,17 +20,13 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD;
 const META_APP_SECRET = process.env.META_APP_SECRET;
 
 const isProduction = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
-const resolvedPassword = ADMIN_PASSWORD || 'lexflow2026';
-const resolvedSecret = ADMIN_SECRET || 'lexflow_secure_server_secret_2026';
 
-if (isProduction) {
-  if (!ADMIN_PASSWORD || ADMIN_PASSWORD === 'lexflow2026' || ADMIN_PASSWORD.length < 8) {
-    console.warn('[AVISO DE SEGURANÇA] ADMIN_PASSWORD não configurada ou usando senha padrão. Recomendado definir ADMIN_PASSWORD nas Variáveis de Ambiente da Vercel.');
-  }
-  if (!ADMIN_SECRET || ADMIN_SECRET === 'lexflow_secure_server_secret_2026' || ADMIN_SECRET.length < 16) {
-    console.warn('[AVISO DE SEGURANÇA] ADMIN_SECRET não configurado ou menor que 16 caracteres. Usando chave de sessão segura padrão.');
-  }
-}
+const adminConfigured = ADMIN_PASSWORD && ADMIN_PASSWORD.length >= 8 && ADMIN_SECRET && ADMIN_SECRET.length >= 16;
+const canUseAdmin = !isProduction || adminConfigured;
+
+const resolvedPassword = canUseAdmin ? (ADMIN_PASSWORD || 'lexflow2026') : undefined;
+const resolvedSecret = canUseAdmin ? (ADMIN_SECRET || 'lexflow_secure_server_secret_2026') : undefined;
+
 
 const BASE44_APP_ID = process.env.BASE44_APP_ID || '6abd7343909c5bbba892bcc2';
 const BASE44_ACCESS_TOKEN = process.env.BASE44_ACCESS_TOKEN;
@@ -46,6 +42,7 @@ const base44 = BASE44_ACCESS_TOKEN
 // 2. CRYPTOGRAPHIC SIGNED TOKENS (HMAC-SHA256)
 // ==========================================
 function generateSignedToken(): string {
+  if (!resolvedSecret) throw new Error('Secret not configured');
   const expiresAt = Date.now() + 8 * 60 * 60 * 1000; // 8 hours expiration
   const payload = JSON.stringify({ exp: expiresAt, salt: crypto.randomBytes(16).toString('hex') });
   const signature = crypto.createHmac('sha256', resolvedSecret).update(payload).digest('hex');
@@ -53,6 +50,7 @@ function generateSignedToken(): string {
 }
 
 function verifySignedToken(token: string): boolean {
+  if (!resolvedSecret) return false;
   try {
     if (!token || typeof token !== 'string' || token.length > 2048) return false;
     const decodedJson = Buffer.from(token, 'base64').toString('utf-8');
@@ -155,6 +153,10 @@ app.post('/api/auth/login', (req, res) => {
 
   const { password } = req.body;
 
+  if (!resolvedPassword) {
+     return res.status(503).json({ status: 'error', message: 'Serviço administrativo indisponível.' });
+  }
+
   const passwordMatch =
     typeof password === 'string' &&
     password.length === resolvedPassword.length &&
@@ -251,7 +253,7 @@ let lastMonitoringCheckTime = 0;
 // ==========================================
 // 8. PRO MONITOR REAL DIAGNOSTIC ENDPOINT
 // ==========================================
-app.get('/api/monitoring/status', requireAdminAuth, async (req, res) => {
+app.get('/api/monitoring/status', async (req, res) => {
   const isTestExecution = req.query.test === 'true';
   const isAutoRefresh = req.query.auto === 'true';
   const startTime = Date.now();

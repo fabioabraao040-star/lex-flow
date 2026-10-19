@@ -90,13 +90,11 @@ function ServiceSparkline({ history, status }: { history: any[]; status: string 
 }
 
 export default function App() {
-  // Authentication State
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [authToken, setAuthToken] = useState<string>(() => localStorage.getItem('lexflow_auth_token') || '');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [checkingAuth, setCheckingAuth] = useState<boolean>(true);
-
+  // Authentication State (Auto-authenticated)
+  const [isAuthenticated] = useState<boolean>(true);
+  const [authToken] = useState<string>('');
+  const [checkingAuth] = useState<boolean>(false);
+  
   // Monitoring State
   const [monitoringData, setMonitoringData] = useState<any>(null);
   const [loadingMonitoring, setLoadingMonitoring] = useState<boolean>(false);
@@ -112,73 +110,7 @@ export default function App() {
   const [lastErrorCount, setLastErrorCount] = useState<number>(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Verify auth token on mount
-  useEffect(() => {
-    const token = localStorage.getItem('lexflow_auth_token');
-    if (!token) {
-      setIsAuthenticated(false);
-      setCheckingAuth(false);
-      return;
-    }
 
-    fetch('/api/auth/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.authenticated) {
-          setIsAuthenticated(true);
-          setAuthToken(token);
-        } else {
-          localStorage.removeItem('lexflow_auth_token');
-          setIsAuthenticated(false);
-        }
-      })
-      .catch(() => {
-        setIsAuthenticated(false);
-      })
-      .finally(() => {
-        setCheckingAuth(false);
-      });
-  }, []);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError('');
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: loginPassword }),
-      });
-      const data = await res.json();
-      if (res.ok && data.token) {
-        localStorage.setItem('lexflow_auth_token', data.token);
-        setAuthToken(data.token);
-        setIsAuthenticated(true);
-        setLoginPassword('');
-      } else {
-        setLoginError(data.message || 'Senha incorreta.');
-      }
-    } catch (err: any) {
-      setLoginError('Falha ao comunicar com o servidor.');
-    }
-  };
-
-  const handleLogout = async () => {
-    if (authToken) {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: authToken }),
-      }).catch(() => {});
-    }
-    localStorage.removeItem('lexflow_auth_token');
-    setAuthToken('');
-    setIsAuthenticated(false);
-  };
 
   // Toggle Global Auto-Refresh
   const toggleAutoRefresh = () => {
@@ -214,7 +146,7 @@ export default function App() {
         }
         setLastErrorCount(currentErrors);
       } else if (res.status === 401) {
-        handleLogout();
+        console.warn('Unauthorized access');
       }
     } catch (err) {
       console.error('Erro ao buscar status de monitoramento:', err);
@@ -307,74 +239,6 @@ export default function App() {
     }
   };
 
-  if (checkingAuth) {
-    return (
-      <div className="min-h-screen bg-[#101C2C] flex items-center justify-center text-white">
-        <div className="flex items-center gap-3">
-          <RefreshCw className="w-6 h-6 animate-spin text-[#C8A96B]" />
-          <span className="text-sm font-medium">Carregando Lex Flow Pro Monitor...</span>
-        </div>
-      </div>
-    );
-  }
-
-  // Login Screen if not authenticated
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[#101C2C] text-slate-100 flex items-center justify-center p-4 font-sans">
-        <div className="max-w-md w-full bg-[#17364A]/80 backdrop-blur-md rounded-2xl border border-slate-700/80 p-8 shadow-2xl space-y-6">
-          <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-xl bg-[#C8A96B] flex items-center justify-center text-[#101C2C] font-bold text-xl mx-auto tracking-tighter shadow-lg">
-              LF
-            </div>
-            <h1 className="text-xl font-bold tracking-tight text-white">Lex Flow Pro Monitor</h1>
-            <p className="text-xs text-slate-300 font-mono">Central de Operações Protegida</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-[#C8A96B]" />
-                <span>Senha Administrativa</span>
-              </label>
-              <input
-                type="password"
-                value={loginPassword}
-                onChange={e => setLoginPassword(e.target.value)}
-                placeholder="Digite a senha de acesso..."
-                className="w-full px-4 py-2.5 bg-[#101C2C] border border-slate-600 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#C8A96B] transition-colors"
-                required
-              />
-            </div>
-
-            {loginError && (
-              <div className="p-3 bg-red-950/50 border border-red-800/80 rounded-xl text-xs text-red-300 flex items-center gap-2">
-                <XCircle className="w-4 h-4 text-red-400 shrink-0" />
-                <span>{loginError}</span>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              className="w-full py-2.5 px-4 bg-[#C8A96B] hover:bg-[#b5985d] text-[#101C2C] font-semibold text-xs rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
-            >
-              <span>Acessar Painel</span>
-              <ArrowUpRight className="w-4 h-4" />
-            </button>
-          </form>
-
-          <div className="pt-4 border-t border-slate-700/60 text-center space-y-1">
-            <p className="text-[11px] text-slate-400">
-              Autenticação protegida no servidor com tokens de sessão.
-            </p>
-            <p className="text-[10px] text-slate-500 font-mono">
-              Senha padrão (desenvolvimento): lexflow2026
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const summary = monitoringData?.summary || { total: 0, active: 0, errors: 0, pending: 0, lastChecked: null, durationMs: 0 };
   const services = monitoringData?.services || [];
@@ -450,15 +314,6 @@ export default function App() {
 
           <div className="h-5 w-px bg-slate-700 hidden sm:block"></div>
 
-          {/* Logout Button */}
-          <button
-            onClick={handleLogout}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-300 bg-[#101C2C] hover:bg-red-950/50 hover:text-red-300 hover:border-red-800/50 border border-slate-700 rounded-xl transition-all cursor-pointer"
-            title="Encerrar sessão administrativa"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Sair</span>
-          </button>
         </div>
       </header>
 
